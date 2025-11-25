@@ -10,10 +10,35 @@ const getClient = () => {
   return new GoogleGenerativeAI(apiKey);
 };
 
+// Crear sesión de chat
+export const createChatSession = () => {
+  const genAI = getClient();
+  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); // ✅ CAMBIADO
+  return model.startChat({
+    history: [],
+  });
+};
+
+// Enviar mensaje con streaming
+export const streamMessage = async (chat: any, message: string, onChunk: (text: string) => void) => {
+  try {
+    const result = await chat.sendMessageStream(message);
+    
+    for await (const chunk of result.stream) {
+      const chunkText = chunk.text();
+      onChunk(chunkText);
+    }
+  } catch (error) {
+    console.error("Error al enviar mensaje:", error);
+    throw error;
+  }
+};
+
+// Análisis de datos financieros
 export const analyzeFinancialData = async (data: string) => {
   try {
     const genAI = getClient();
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); // ✅ CAMBIADO
     
     const prompt = `Analiza los siguientes datos financieros: ${data}`;
     const result = await model.generateContent(prompt);
@@ -25,4 +50,4 @@ export const analyzeFinancialData = async (data: string) => {
   }
 };
 
-export default { analyzeFinancialData };
+export default { createChatSession, streamMessage, analyzeFinancialData };
