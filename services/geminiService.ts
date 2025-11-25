@@ -1,5 +1,10 @@
-import { GoogleGenAI, Chat, GenerateContentResponse, Type } from "@google/genai";
-import { AgentConfig } from "../types";
+ import { GoogleGenerativeAI } from "@google/generative-ai";  // ✅ CORRECTO
+   
+   const getClient = () => {
+     const apiKey = process.env.API_KEY;
+     const genAI = new GoogleGenerativeAI(apiKey);
+     return genAI;
+   };
 
 // Helper para obtener el cliente de forma segura
 const getClient = () => {
