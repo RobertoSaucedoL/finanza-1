@@ -25,4 +25,4 @@ export const analyzeFinancialData = async (data: string) => {
   }
 };
 
-export default { analyzeFinancialData };
+export default { analyzeFinancialData  };
