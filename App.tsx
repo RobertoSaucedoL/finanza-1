@@ -2,7 +2,7 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { Chat } from "@google/genai";
 import MessageList from './components/MessageList';
 import InputArea from './components/InputArea';
-import { createChatSession, streamMessage } from './services/geminiService';
+import { createChatSession, streamMessage, sendMessageSimple } from './services/geminiService'; // 👈 Añade sendMessageSimple
 import { AgentConfig, ChatMessage, Role, GroundingChunk } from './types';
 import { DEFAULT_CONFIG } from './constants';
 
@@ -16,9 +16,19 @@ const App: React.FC = () => {
   
   // Initialize chat session
   const initChat = useCallback(() => {
-    chatSessionRef.current = createChatSession(config);
-    setMessages([]);
-    console.log("Portaware Intel Agent initialized with model:", config.model);
+    try {
+      chatSessionRef.current = createChatSession(config);
+      setMessages([]);
+      console.log("Portaware Intel Agent initialized with model:", config.model);
+    } catch (error) {
+      console.error("Error initializing chat:", error);
+      setMessages([{
+        id: '1',
+        role: Role.MODEL,
+        text: "Error al inicializar el agente. Verifica tu API Key.",
+        timestamp: Date.now()
+      }]);
+    }
   }, [config]);
 
   // Initial setup
@@ -29,7 +39,7 @@ const App: React.FC = () => {
   }, [initChat]);
 
   const handleSendMessage = async (text: string) => {
-    if (!chatSessionRef.current) return;
+    if (!chatSessionRef.current || !text.trim()) return;
 
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
@@ -54,6 +64,8 @@ const App: React.FC = () => {
     setMessages(prev => [...prev, aiPlaceholder]);
 
     try {
+      // Intenta primero con streaming
+      console.log("🔄 Intentando streaming...");
       const stream = streamMessage(chatSessionRef.current, text);
       
       let fullText = '';
@@ -80,16 +92,57 @@ const App: React.FC = () => {
           : msg
       ));
 
-    } catch (error) {
-      console.error("Error sending message:", error);
-      setMessages(prev => prev.map(msg => 
-        msg.id === aiMessageId 
-          ? { ...msg, text: "Lo siento, ocurrió un error al procesar tu solicitud. Por favor intenta de nuevo.", isStreaming: false }
-          : msg
-      ));
+    } catch (error: any) {
+      console.error("❌ Error en streaming:", error);
+      
+      // Fallback a método simple si el streaming falla
+      if (error.message?.includes("ContentUnion") || error.message?.includes("formato")) {
+        try {
+          console.log("🔄 Fallback a método simple...");
+          const simpleResponse = await sendMessageSimple(chatSessionRef.current, text);
+          
+          setMessages(prev => prev.map(msg => 
+            msg.id === aiMessageId 
+              ? { 
+                  ...msg, 
+                  text: simpleResponse, 
+                  isStreaming: false 
+                }
+              : msg
+          ));
+        } catch (fallbackError: any) {
+          console.error("❌ Error en fallback:", fallbackError);
+          setMessages(prev => prev.map(msg => 
+            msg.id === aiMessageId 
+              ? { 
+                  ...msg, 
+                  text: "Error: No se pudo procesar tu mensaje. Por favor intenta refrescar la página.", 
+                  isStreaming: false 
+                }
+              : msg
+          ));
+        }
+      } else {
+        // Otro tipo de error
+        setMessages(prev => prev.map(msg => 
+          msg.id === aiMessageId 
+            ? { 
+                ...msg, 
+                text: `Error: ${error.message || "Problema de conexión. Intenta nuevamente."}`, 
+                isStreaming: false 
+              }
+            : msg
+        ));
+      }
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Función para reiniciar completamente el chat
+  const handleResetChat = () => {
+    setIsLoading(false);
+    initChat();
   };
 
   return (
@@ -105,9 +158,10 @@ const App: React.FC = () => {
            </div>
            
            <button 
-             onClick={initChat} 
+             onClick={handleResetChat} 
              className="p-2 text-gray-400 hover:text-brand-accent transition-colors"
              title="Nuevo Análisis"
+             disabled={isLoading}
            >
              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
