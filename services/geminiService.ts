@@ -1,56 +1,83 @@
-import { GoogleGenAI, Chat, GenerateContentResponse } from "@google/genai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { AgentConfig } from "../types";
 
-// Helper para obtener el cliente de forma segura y perezosa (lazy)
+// Helper para obtener el cliente de forma segura
 const getClient = () => {
-  const apiKey = process.env.API_KEY;
+  const apiKey = import.meta.env.VITE_API_KEY; // ✅ Cambiado de process.env
   
   if (!apiKey) {
-    console.error("CRÍTICO: No se encontró la API KEY. Asegúrate de configurar la variable de entorno API_KEY en Vercel o en tu archivo .env");
-    // Retornamos un cliente dummy o lanzamos error controlado para no romper la UI inmediatamente
+    console.error("🔑 API Key no encontrada en import.meta.env.VITE_API_KEY");
     throw new Error("API Key no configurada");
   }
-  return new GoogleGenAI({ apiKey });
+  
+  console.log("🔑 API Key detectada (empieza con):", apiKey.substring(0, 6) + "...");
+  return new GoogleGenerativeAI(apiKey); // ✅ Corregido el constructor
 };
 
-export const createChatSession = (config: AgentConfig): Chat => {
+// Crear sesión de chat
+export const createChatSession = (config: AgentConfig) => {
   try {
-    const ai = getClient();
-    const tools = config.useSearch ? [{ googleSearch: {} }] : [];
-
-    return ai.chats.create({
+    const genAI = getClient();
+    console.log("🤖 Inicializando chat con modelo:", config.model);
+    
+    const model = genAI.getGenerativeModel({ 
       model: config.model,
-      config: {
-        systemInstruction: config.systemInstruction,
+      systemInstruction: config.systemInstruction,
+    });
+    
+    const tools = config.useSearch ? [{ googleSearch: {} }] : undefined;
+    
+    return model.startChat({
+      history: [],
+      generationConfig: {
         temperature: config.temperature,
-        tools: tools,
       },
-      history: [], 
+      tools: tools,
     });
   } catch (error) {
-    console.error("Error al crear la sesión de chat:", error);
+    console.error("❌ Error al crear la sesión de chat:", error);
     throw error;
   }
 };
 
-export async function* streamMessage(
-  chat: Chat,
-  message: string
-): AsyncGenerator<{ text: string; groundingChunks?: any[] }, void, unknown> {
-  
+// Enviar mensaje con streaming
+export async function* streamMessage(chat: any, message: string) {
   try {
-    const resultStream = await chat.sendMessageStream({
-      message: message,
-    });
-
-    for await (const chunk of resultStream) {
-      const responseChunk = chunk as GenerateContentResponse;
-      const text = responseChunk.text || '';
-      const groundingChunks = responseChunk.candidates?.[0]?.groundingMetadata?.groundingChunks;
-      yield { text, groundingChunks };
+    console.log("📤 Enviando mensaje:", message);
+    
+    const result = await chat.sendMessageStream(message);
+    
+    for await (const chunk of result.stream) {
+      const chunkText = chunk.text();
+      console.log("📨 Chunk recibido");
+      
+      yield {
+        text: chunkText,
+        groundingChunks: chunk.groundingMetadata?.groundingChunks || []
+      };
     }
+    
+    console.log("✅ Stream completado");
   } catch (error) {
-    console.error("Error in streamMessage:", error);
+    console.error("❌ Error en stream:", error);
     throw error;
   }
 }
+
+// Análisis de datos financieros
+export const analyzeFinancialData = async (data: string) => {
+  try {
+    const genAI = getClient();
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    
+    const prompt = `Analiza los siguientes datos financieros: ${data}`;
+    const result = await model.generateContent(prompt);
+    
+    return result.response.text();
+  } catch (error) {
+    console.error("Error al analizar datos:", error);
+    throw error;
+  }
+};
+
+export default { createChatSession, streamMessage, analyzeFinancialData };
