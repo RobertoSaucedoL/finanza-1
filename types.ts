@@ -27,7 +27,7 @@ export interface AgentConfig {
 }
 
 export enum ModelType {
-  FLASH = 'gemini-1.5-flash',           // ✅ CORREGIDO
-  PRO = 'gemini-1.5-pro',               // ✅ CORREGIDO
-  FLASH_LITE = 'gemini-1.5-flash-8b'    // ✅ CORREGIDO
+  FLASH = 'gemini-2.5-flash',
+  PRO = 'gemini-3-pro-preview',
+  FLASH_LITE = 'gemini-flash-lite-latest'
 }
